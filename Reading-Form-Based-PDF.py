@@ -1,38 +1,39 @@
-import PyPDF2
+import os
+import sys
 
 
-def get_text(fname):
-    f = open(fname, 'rb')
-    pdfr = PyPDF2.PdfFileReader(f)
-    pdfr.numPages
-    page = pdfr.getPage(0)
-    txt = page.extractText()
-    f.close()
-    return txt
+from collections import OrderedDict
+from PyPDF2 import PdfFileReader
 
 
-def combine_files(f1, f2, rf):
-    pdf1 = open(f1, 'rb')
-    pdf2 = open(f2, 'rb')
+def readFields(obj, t=None, res=None, fo=None):
+    fa = {'/FT': 'Field Type', '/Parent': 'Parent', '/T': 'Field Name', '/TU': 'Alternate Field Name', #Defining attrib.
+          'TM': 'Mapping Name', '/Ff': 'Field Flags', '/V': 'Value', '/DV': 'Default Value'}
+    if res is None:
+        res = OrderedDict()
+        items = obj.trailer["/Root"] #Check the root of the pdf. Check for form.
+        if "/AcroForm" in items:
+            t = items["/AcroForm"]
+        else:
+            return None
+    if t is None:
+        return res
+    obj._checkKids(t, res, fo) #Check child elements of this form
+    for attr in t: #Check which are really fields
+        obj._buildField(t, res, fo, fa)
+        break
+    if "/Fields" in t:
+        flds = t["/Fields"]
+        for f in flds:
+            fld = f.getObject()
+            obj._buildField(fld, res, fo, fa)
+    return res
 
-    pdfr1 = PyPDF2.PdfFileReader(pdf1)
-    pdfr2 = PyPDF2.PdfFileReader(pdf2)
-    pdfw = PyPDF2.PdfFileWriter()
 
-    for pn in range(pdfr1.numPages):
-        po = pdfr1.getPage(pn)
-        pdfw.addPage(po)
-    for pn in range(pdfr2.numPages):
-        po = pdfr2.getPage(pn)
-        pdfw.addPage(po)
-
-    pdfo = open(rf, 'wb')
-    pdfw.write(pdfo)
-    pdfo.close()
-    pdf1.close()
-    pdf2.close()
+def get_form_fields(infile):
+    infile = PdfFileReader(open(infile, 'rb'))
+    fields = readFields(infile)
+    return OrderedDict((k, v.get('/V', '')) for k, v in fields.items())
 
 
-f = './combined.pdf'
-combine_files('./example1.pdf', '.example2.pdf', f)
-print(get_text(f))
+print(get_form_fields('./example1.pdf'))
